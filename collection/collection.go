@@ -25,12 +25,10 @@ func Init[T any](val []T) *Collection[T] {
 	}
 }
 
-func New[T any](l int) *Collection[T] {
+func New[T any]() *Collection[T] {
 	return &Collection[T]{
 		buckets: []*bucket[T]{
-			{
-				data: make([]T, 0, l),
-			},
+			newBucket[T](),
 		},
 	}
 }
@@ -41,18 +39,20 @@ func (c *Collection[T]) Len() int {
 
 const bucketSz = 1000
 
+func newBucket[T any]() *bucket[T] {
+	return &bucket[T]{
+		data: make([]T, 0, bucketSz),
+	}
+}
+
 func (c *Collection[T]) Push(val T) *T {
 	if len(c.buckets) == 0 {
-		c.buckets = append(make([]*bucket[T], 0, 1000), &bucket[T]{
-			data: make([]T, 0, bucketSz),
-		})
+		c.buckets = append(make([]*bucket[T], 0, 1000), newBucket[T]())
 	}
 	b := c.buckets[len(c.buckets)-1]
 	l := len(b.data)
 	if l == cap(b.data) {
-		b = &bucket[T]{
-			data: make([]T, 0, bucketSz),
-		}
+		b = newBucket[T]()
 		c.buckets = append(c.buckets, b)
 		l = 0
 	}

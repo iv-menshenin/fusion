@@ -24,28 +24,31 @@ type backRef[K Key, T any] struct {
 func New[K Key, T any](p int) *SparseSet[K, T] {
 	return &SparseSet[K, T]{
 		sparse: slices.Repeat([]int{NULL}, p),
-		dense:  collection.New[backRef[K, T]](p),
-		size:   p,
+		dense:  collection.New[backRef[K, T]](),
 	}
 }
 
 func (s *SparseSet[K, T]) Len() int {
-	return len(s.sparse)
+	return s.size
 }
 
 const NULL = -1
 
 func (s *SparseSet[K, T]) Set(key K, val T) (ref *T) {
 	id := int(key)
-	if s.size <= id {
-		s.sparse = append(s.sparse, slices.Repeat([]int{NULL}, s.size)...)
-		s.size = len(s.sparse)
+	if currSz := len(s.sparse); currSz <= id {
+		newSize := len(s.sparse) * 2
+		if newSize < id {
+			newSize = id + 1
+		}
+		s.sparse = append(s.sparse, slices.Repeat([]int{NULL}, newSize-currSz)...)
 	}
 
 	if densePos := s.sparse[id]; densePos == NULL {
 		s.sparse[id] = s.dense.Len()
 		br := s.dense.Push(backRef[K, T]{ref: key, data: val})
 		ref = &br.data
+		s.size++
 	} else {
 		br := s.dense.Get(densePos)
 		br.data = val
@@ -55,7 +58,7 @@ func (s *SparseSet[K, T]) Set(key K, val T) (ref *T) {
 
 func (s *SparseSet[K, T]) Get(key K) *T {
 	id := int(key)
-	if s.size <= id {
+	if len(s.sparse) <= id {
 		return nil
 	}
 	if s.sparse[id] == NULL {
@@ -68,18 +71,28 @@ func (s *SparseSet[K, T]) Get(key K) *T {
 func (s *SparseSet[K, T]) Pop() T {
 	br := s.dense.Pop()
 	s.sparse[int(br.ref)] = NULL
+	s.size--
 	return br.data
 }
 
 func (s *SparseSet[K, T]) Delete(key K) {
 	id := int(key)
-	if s.size <= id {
+	if len(s.sparse) <= id {
 		panic("out of bounds")
 	}
 
+	if id == 750000 {
+		id = 750000
+	}
+
+	s.size--
 	deleted := s.sparse[id]
+	s.sparse[id] = NULL
 	dd := s.dense.Get(deleted)
 	ld := s.dense.Pop() // removed last from dense
+	if ld.ref == key {
+		return
+	}
 	*dd = ld
 	s.sparse[id] = NULL
 	s.sparse[int(ld.ref)] = deleted // ld.ref referenced to entity was poped from dense
