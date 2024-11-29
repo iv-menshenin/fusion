@@ -79,6 +79,20 @@ func TestFusionCollection(t *testing.T) {
 		c.Push(67)
 		require.Equal(t, *c.Get(2), 54)
 	})
+	t.Run("append_get_delete", func(t *testing.T) {
+		t.Parallel()
+
+		var c Collection[int64]
+		c.Push(801)
+		c.Push(802)
+		c.Push(803)
+		require.Equal(t, int64(803), *c.Get(2))
+		require.Equal(t, int64(802), *c.Get(1))
+		require.Equal(t, int64(801), *c.Get(0))
+		c.Delete(1)
+		require.Equal(t, int64(803), *c.Get(1))
+		require.Equal(t, int64(801), *c.Get(0))
+	})
 }
 
 func TestFusionCollectionPushPop(t *testing.T) {

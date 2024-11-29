@@ -68,6 +68,20 @@ func (c *Collection[T]) Get(idx int) *T {
 	return &c.buckets[idx/bucketSz].data[idx%bucketSz]
 }
 
+func (c *Collection[T]) Delete(idx int) {
+	if idx >= c.len {
+		panic("out of bounds")
+	}
+	c.len--
+	if c.len == idx {
+		// removed last element
+		return
+	}
+	ref := &c.buckets[idx/bucketSz].data[idx%bucketSz]
+	last := c.Pop()
+	*ref = last
+}
+
 func (c *Collection[T]) Pop() T {
 	if c.len < 1 {
 		panic("called Pop on empty Collection")
