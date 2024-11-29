@@ -136,3 +136,15 @@ func BenchmarkSparseSet(b *testing.B) {
 		}
 	})
 }
+
+func BenchmarkSparseSetDelete(b *testing.B) {
+	sp := New[int, string](b.N)
+	for i := 0; i < b.N; i++ {
+		sp.Set(i, fmt.Sprintf("inited-%d", i))
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sp.Delete(i)
+	}
+}
