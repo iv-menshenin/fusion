@@ -19,10 +19,10 @@ type backRef[K Key, T any] struct {
 	data T
 }
 
-func New[K Key, T any](p int) *SparseSet[K, T] {
+func New[K Key, T any](p, bsz int) *SparseSet[K, T] {
 	s := SparseSet[K, T]{
 		sparse: make([]int, p),
-		dense:  collection.New[backRef[K, T]](),
+		dense:  collection.New[backRef[K, T]](bsz),
 	}
 	for n := 0; n < len(s.sparse); n++ {
 		s.sparse[n] = NULL

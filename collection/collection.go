@@ -5,6 +5,7 @@ import "github.com/iv-menshenin/fusion/errors"
 type (
 	Collection[T any] struct {
 		len     int
+		bsz     int
 		buckets []*bucket[T]
 	}
 	bucket[T any] struct {
@@ -14,32 +15,37 @@ type (
 
 const defaultBucketSz = 1000
 
-func Init[T any](val []T) *Collection[T] {
+func Init[T any](val []T, bucketSz int) *Collection[T] {
+	if bucketSz == 0 {
+		bucketSz = defaultBucketSz
+	}
 	var (
 		l       = len(val)
-		buckets = make([]*bucket[T], 0, 1+(l/defaultBucketSz))
+		buckets = make([]*bucket[T], 0, 1+(l/bucketSz))
 	)
 	for len(val) > 0 {
-		if len(val) < defaultBucketSz {
-			buckets = append(buckets, &bucket[T]{data: append(make([]T, 0, defaultBucketSz), val...)})
+		if len(val) < bucketSz {
+			buckets = append(buckets, &bucket[T]{data: append(make([]T, 0, bucketSz), val...)})
 			break
 		}
 		buckets = append(buckets, &bucket[T]{
-			data: val[:defaultBucketSz], // no copy data
+			data: val[:bucketSz], // no copy data
 		})
-		val = val[defaultBucketSz:]
+		val = val[bucketSz:]
 	}
 	return &Collection[T]{
 		len:     l,
+		bsz:     bucketSz,
 		buckets: buckets,
 	}
 }
 
-func New[T any]() *Collection[T] {
+func New[T any](bucketSz int) *Collection[T] {
+	if bucketSz == 0 {
+		bucketSz = defaultBucketSz
+	}
 	return &Collection[T]{
-		buckets: []*bucket[T]{
-			newBucket[T](),
-		},
+		bsz: bucketSz,
 	}
 }
 
@@ -47,20 +53,14 @@ func (c *Collection[T]) Len() int {
 	return c.len
 }
 
-func newBucket[T any]() *bucket[T] {
-	return &bucket[T]{
-		data: make([]T, 0, defaultBucketSz),
-	}
-}
-
 func (c *Collection[T]) Push(val T) *T {
 	if len(c.buckets) == 0 {
-		c.buckets = append(make([]*bucket[T], 0, 1000), newBucket[T]())
+		c.buckets = append(make([]*bucket[T], 0, 1000), c.newBucket())
 	}
 	b := c.buckets[len(c.buckets)-1]
 	l := len(b.data)
 	if l == cap(b.data) {
-		b = newBucket[T]()
+		b = c.newBucket()
 		c.buckets = append(c.buckets, b)
 		l = 0
 	}
@@ -69,11 +69,20 @@ func (c *Collection[T]) Push(val T) *T {
 	return &b.data[l]
 }
 
+func (c *Collection[T]) newBucket() *bucket[T] {
+	if c.bsz == 0 {
+		c.bsz = defaultBucketSz
+	}
+	return &bucket[T]{
+		data: make([]T, 0, c.bsz),
+	}
+}
+
 func (c *Collection[T]) Get(i int) *T {
 	if i >= c.len {
 		return nil
 	}
-	return &c.buckets[i/defaultBucketSz].data[i%defaultBucketSz]
+	return &c.buckets[i/c.bsz].data[i%c.bsz]
 }
 
 func (c *Collection[T]) Delete(i int) {
@@ -87,7 +96,7 @@ func (c *Collection[T]) Delete(i int) {
 		b.data = b.data[:len(b.data)-1]
 		return
 	}
-	ref := &c.buckets[i/defaultBucketSz].data[i%defaultBucketSz]
+	ref := &c.buckets[i/c.bsz].data[i%c.bsz]
 	last := c.Pop()
 	*ref = last
 }

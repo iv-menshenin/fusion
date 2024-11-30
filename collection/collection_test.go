@@ -63,7 +63,7 @@ func TestFusionCollection(t *testing.T) {
 	})
 	t.Run("random-search", func(t *testing.T) {
 		t.Parallel()
-		c := Init([]int{67, 13, 54, 2, 1, 42})
+		c := Init([]int{67, 13, 54, 2, 1, 42}, 500)
 
 		c.Push(43)
 
@@ -154,7 +154,7 @@ func TestFusionCollectionInit(t *testing.T) {
 		for n := 0; n < count; n++ {
 			box[n] = uint64(n)
 		}
-		c := Init(box)
+		c := Init(box, defaultBucketSz)
 		require.Equal(t, count, c.Len())
 		for n := 0; n < count; n++ {
 			require.Equal(t, uint64(n), *c.Get(n))
@@ -166,7 +166,7 @@ func TestFusionCollectionInit(t *testing.T) {
 		for n := 0; n < count-1; n++ {
 			box[n] = uint64(n)
 		}
-		c := Init(box)
+		c := Init(box, defaultBucketSz)
 		require.Equal(t, count-1, c.Len())
 		for n := 0; n < count-1; n++ {
 			require.Equal(t, uint64(n), *c.Get(n))

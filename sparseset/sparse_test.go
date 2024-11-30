@@ -9,7 +9,7 @@ import (
 )
 
 func TestSparseSet(t *testing.T) {
-	sp := New[int64, string](0)
+	sp := New[int64, string](0, 0)
 
 	sp.Set(10, "foo")
 	sp.Set(15, "bar")
@@ -45,7 +45,7 @@ func TestSparseSet(t *testing.T) {
 }
 
 func TestSparseSetMass(t *testing.T) {
-	sp := New[int64, string](1000)
+	sp := New[int64, string](1000, 1000)
 
 	const count = 1000000
 	for n := 0; n < count; n += 2 {
@@ -109,7 +109,7 @@ func TestSparseSetMass(t *testing.T) {
 }
 
 func BenchmarkSparseSet(b *testing.B) {
-	sp := New[int, string](1000)
+	sp := New[int, string](1000, 1000)
 
 	// init fill
 	for i := 0; i < 1000000; i++ {
@@ -138,7 +138,7 @@ func BenchmarkSparseSet(b *testing.B) {
 }
 
 func BenchmarkSparseSetDelete(b *testing.B) {
-	sp := New[int, string](b.N)
+	sp := New[int, string](b.N, 1000)
 	for i := 0; i < b.N; i++ {
 		sp.Set(i, fmt.Sprintf("inited-%d", i))
 	}
