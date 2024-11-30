@@ -1,8 +1,6 @@
 package sparseset
 
 import (
-	"slices"
-
 	"github.com/iv-menshenin/fusion/collection"
 )
 
@@ -22,10 +20,14 @@ type backRef[K Key, T any] struct {
 }
 
 func New[K Key, T any](p int) *SparseSet[K, T] {
-	return &SparseSet[K, T]{
-		sparse: slices.Repeat([]int{NULL}, p),
+	s := SparseSet[K, T]{
+		sparse: make([]int, p),
 		dense:  collection.New[backRef[K, T]](),
 	}
+	for n := 0; n < len(s.sparse); n++ {
+		s.sparse[n] = NULL
+	}
+	return &s
 }
 
 func (s *SparseSet[K, T]) Len() int {
@@ -41,7 +43,13 @@ func (s *SparseSet[K, T]) Set(key K, val T) (ref *T) {
 		if newSize < id {
 			newSize = id + 1
 		}
-		s.sparse = append(s.sparse, slices.Repeat([]int{NULL}, newSize-currSz)...)
+		old := s.sparse
+		s.sparse = make([]int, 0, newSize)
+		s.sparse = append(s.sparse, old...)
+		s.sparse = s.sparse[:newSize]
+		for n := currSz; n < newSize; n++ {
+			s.sparse[n] = NULL
+		}
 	}
 
 	if densePos := s.sparse[id]; densePos == NULL {
