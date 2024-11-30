@@ -61,7 +61,7 @@ func TestFusionCollection(t *testing.T) {
 			require.Equal(t, strconv.Itoa(n-1), e.s)
 		}
 	})
-	t.Run("search-cache-bug", func(t *testing.T) {
+	t.Run("random-search", func(t *testing.T) {
 		t.Parallel()
 		c := Init([]int{67, 13, 54, 2, 1, 42})
 
@@ -92,6 +92,14 @@ func TestFusionCollection(t *testing.T) {
 		c.Delete(1)
 		require.Equal(t, int64(803), *c.Get(1))
 		require.Equal(t, int64(801), *c.Get(0))
+		c.Delete(0)
+		c.Delete(0)
+		require.Equal(t, 0, c.Len())
+
+		c.Push(0)
+		require.Equal(t, int64(0), *c.Get(0))
+		require.Nil(t, c.Get(1))
+		require.Nil(t, c.Get(2))
 	})
 }
 
@@ -134,6 +142,40 @@ func TestFusionCollectionPushPop(t *testing.T) {
 		}
 		for n := elemCount - 1; n >= 0; n-- {
 			require.Equal(t, n, c.Pop())
+		}
+	})
+}
+
+func TestFusionCollectionInit(t *testing.T) {
+	t.Parallel()
+	t.Run("init_buckets", func(t *testing.T) {
+		const count = (defaultBucketSz * 5) / 2
+		var box = make([]uint64, count)
+		for n := 0; n < count; n++ {
+			box[n] = uint64(n)
+		}
+		c := Init(box)
+		require.Equal(t, count, c.Len())
+		for n := 0; n < count; n++ {
+			require.Equal(t, uint64(n), *c.Get(n))
+		}
+	})
+	t.Run("half_bucket", func(t *testing.T) {
+		const count = defaultBucketSz / 2
+		var box = make([]uint64, count-1)
+		for n := 0; n < count-1; n++ {
+			box[n] = uint64(n)
+		}
+		c := Init(box)
+		require.Equal(t, count-1, c.Len())
+		for n := 0; n < count-1; n++ {
+			require.Equal(t, uint64(n), *c.Get(n))
+		}
+
+		c.Push(count - 1)
+		require.Equal(t, count, c.Len())
+		for n := 0; n < count; n++ {
+			require.Equal(t, uint64(n), *c.Get(n))
 		}
 	})
 }

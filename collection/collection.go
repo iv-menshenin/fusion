@@ -1,5 +1,7 @@
 package collection
 
+import "github.com/iv-menshenin/fusion/errors"
+
 type (
 	Collection[T any] struct {
 		len     int
@@ -10,17 +12,25 @@ type (
 	}
 )
 
+const defaultBucketSz = 1000
+
 func Init[T any](val []T) *Collection[T] {
-	var buckets []*bucket[T]
-	for len(val) > bucketSz {
-		buckets = []*bucket[T]{
-			{data: append(make([]T, 0, bucketSz), val[:bucketSz]...)},
+	var (
+		l       = len(val)
+		buckets = make([]*bucket[T], 0, 1+(l/defaultBucketSz))
+	)
+	for len(val) > 0 {
+		if len(val) < defaultBucketSz {
+			buckets = append(buckets, &bucket[T]{data: append(make([]T, 0, defaultBucketSz), val...)})
+			break
 		}
-		val = val[bucketSz:]
+		buckets = append(buckets, &bucket[T]{
+			data: val[:defaultBucketSz], // no copy data
+		})
+		val = val[defaultBucketSz:]
 	}
-	buckets = append(buckets, &bucket[T]{data: append(make([]T, 0, bucketSz), val...)})
 	return &Collection[T]{
-		len:     len(val),
+		len:     l,
 		buckets: buckets,
 	}
 }
@@ -37,11 +47,9 @@ func (c *Collection[T]) Len() int {
 	return c.len
 }
 
-const bucketSz = 1000
-
 func newBucket[T any]() *bucket[T] {
 	return &bucket[T]{
-		data: make([]T, 0, bucketSz),
+		data: make([]T, 0, defaultBucketSz),
 	}
 }
 
@@ -61,39 +69,46 @@ func (c *Collection[T]) Push(val T) *T {
 	return &b.data[l]
 }
 
-func (c *Collection[T]) Get(idx int) *T {
-	if idx >= c.len {
+func (c *Collection[T]) Get(i int) *T {
+	if i >= c.len {
 		return nil
 	}
-	return &c.buckets[idx/bucketSz].data[idx%bucketSz]
+	return &c.buckets[i/defaultBucketSz].data[i%defaultBucketSz]
 }
 
-func (c *Collection[T]) Delete(idx int) {
-	if idx >= c.len {
-		panic("out of bounds")
+func (c *Collection[T]) Delete(i int) {
+	if i >= c.len {
+		panic(errors.OutOfBounds(c.len, i))
 	}
-	c.len--
-	if c.len == idx {
+	if (c.len - 1) == i {
 		// removed last element
+		c.len--
+		b := c.buckets[len(c.buckets)-1]
+		b.data = b.data[:len(b.data)-1]
 		return
 	}
-	ref := &c.buckets[idx/bucketSz].data[idx%bucketSz]
+	ref := &c.buckets[i/defaultBucketSz].data[i%defaultBucketSz]
 	last := c.Pop()
 	*ref = last
 }
 
 func (c *Collection[T]) Pop() T {
 	if c.len < 1 {
-		panic("called Pop on empty Collection")
+		panic(errors.OutOfBounds(c.len, 0))
 	}
 	c.len--
 	b := c.buckets[len(c.buckets)-1]
 	l := len(b.data)
 	val := b.data[l-1]
-	b.data = b.data[:l-1]
-	if len(b.data) == 0 {
+	// clean cell
+	var empty T
+	b.data[l-1] = empty
+	// reduce
+	if len(b.data) == 1 {
 		c.buckets[len(c.buckets)-1] = nil
 		c.buckets = c.buckets[:len(c.buckets)-1]
+	} else {
+		b.data = b.data[:l-1]
 	}
 	return val
 }
