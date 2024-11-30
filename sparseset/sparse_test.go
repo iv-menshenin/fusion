@@ -1,9 +1,11 @@
 package sparseset
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -31,12 +33,14 @@ func TestSparseSet(t *testing.T) {
 	sp.Set(88, "xyzzy")
 	sp.Set(91, "thud")
 
-	require.Equal(t, "thud", sp.Pop())
-	require.Equal(t, "xyzzy", sp.Pop())
+	sp.Delete(88)
 
 	require.Equal(t, "fred", *sp.Get(51))
 	require.Equal(t, "baz", *sp.Get(25))
 	require.Equal(t, "corge", *sp.Get(56))
+	require.Equal(t, "thud", *sp.Get(91))
+
+	sp.Delete(91)
 
 	require.Nil(t, sp.Get(10))
 	require.Nil(t, sp.Get(23))
@@ -61,11 +65,6 @@ func TestSparseSetMass(t *testing.T) {
 		}
 	}
 
-	// pop last
-	last := sp.Pop()
-	if last != strconv.Itoa(count-1) {
-		t.Fatal("wrong last value")
-	}
 	sp.Set(count-1, "last")
 
 	// delete all thirds
@@ -108,31 +107,81 @@ func TestSparseSetMass(t *testing.T) {
 	}
 }
 
+func TestSparseSetEach(t *testing.T) {
+	t.Run("1_000_000/100_000", func(t *testing.T) {
+		type some struct {
+			X, Y, Z int
+		}
+		sp := New[int, some](1000000, 100_000)
+		for i := 0; i < 1_000_000; i++ {
+			sp.Set(i, some{})
+		}
+
+		started := time.Now()
+		var y int
+		sp.Each(func(_ int, val *some) bool {
+			val.X = 1
+			val.Y = y
+			val.Z = -y
+			y++
+			return true
+		})
+		t.Logf("done 1m with %v", time.Since(started))
+
+		// check
+		for i := 0; i < 1_000_000; i++ {
+			v := sp.Get(i)
+			require.Equal(t, 1, v.X)
+			require.Equal(t, i, v.Y)
+			require.Equal(t, -i, v.Z)
+		}
+	})
+	t.Run("16_000_000/1_000_000", func(t *testing.T) {
+		type some struct {
+			X, Y, Z int
+		}
+		sp := New[int, some](16000000, 1_000_000)
+		for i := 0; i < 16_000_000; i++ {
+			sp.Set(i, some{})
+		}
+
+		started := time.Now()
+		var y int
+		sp.Each(func(_ int, val *some) bool {
+			val.X = 1
+			val.Y = y
+			val.Z = -y
+			y++
+			return true
+		})
+		t.Logf("done 16m with %v", time.Since(started))
+	})
+}
+
 func BenchmarkSparseSet(b *testing.B) {
-	sp := New[int, string](1000, 1000)
-
-	// init fill
-	for i := 0; i < 1000000; i++ {
-		sp.Set(i, fmt.Sprintf("inited-%d", i))
-	}
-
 	b.Run("insert", func(b *testing.B) {
+		sp := New[int, string](1000, 1000)
+		for i := 0; i < 1000000; i++ {
+			sp.Set(i, fmt.Sprintf("inited-%d", i))
+		}
+
+		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			sp.Set(i, fmt.Sprintf("inserted-%d", i))
 		}
 	})
 
-	b.Run("pop", func(b *testing.B) {
-		var idx int
-		for sp.Len() < b.N {
-			sp.Set(idx, strconv.Itoa(idx))
-			idx++
+	b.Run("delete", func(b *testing.B) {
+		sp := New[int, string](1000, 1000)
+		for i := 0; i < b.N; i++ {
+			sp.Set(i, strconv.Itoa(i))
 		}
+
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			sp.Pop()
+			sp.Delete(i)
 		}
 	})
 }
@@ -147,4 +196,76 @@ func BenchmarkSparseSetDelete(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		sp.Delete(i)
 	}
+}
+
+func BenchmarkSparseSetEach(b *testing.B) {
+	b.Run("by_count", func(b *testing.B) {
+		sp := New[int, uint64](b.N, 1000)
+		for i := 0; i < b.N; i++ {
+			sp.Set(i, uint64(i))
+		}
+		b.ReportAllocs()
+		b.ResetTimer()
+		sp.Each(func(_ int, val *uint64) bool {
+			*val = *val + 12
+			return true
+		})
+	})
+	b.Run("static_size", func(b *testing.B) {
+		sp := New[int, uint64](b.N, 1000)
+		for i := 0; i < 1_000_000; i++ {
+			sp.Set(i, uint64(i))
+		}
+		b.ReportAllocs()
+		b.ResetTimer()
+		var left = b.N
+		for left > 0 {
+			sp.Each(func(_ int, val *uint64) bool {
+				left--
+				*val = *val + 12
+				return left > 0
+			})
+		}
+	})
+}
+
+func BenchmarkSparseSetEach18m(b *testing.B) {
+	sp := New[int, uint64](b.N, 1000000)
+	for i := 0; i < 18_000_000; i++ {
+		sp.Set(i, uint64(i))
+	}
+	b.ResetTimer()
+	b.Run("static_size", func(b *testing.B) {
+		b.ReportAllocs()
+		var left = b.N
+		for left > 0 {
+			sp.Each(func(_ int, val *uint64) bool {
+				left--
+				*val = *val + 12
+				return left > 0
+			})
+		}
+	})
+}
+
+func BenchmarkSparseSetIter18m(b *testing.B) {
+	sp := New[int, uint64](b.N, 1000000)
+	for i := 0; i < 18_000_000; i++ {
+		sp.Set(i, uint64(i))
+	}
+	b.ResetTimer()
+	b.Run("static_size", func(b *testing.B) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		b.ReportAllocs()
+		var left = b.N
+		for left > 0 {
+			for val := range sp.Iterator(ctx, 0) {
+				*val.Val = 0
+				if left--; left < 1 {
+					return
+				}
+			}
+		}
+	})
 }

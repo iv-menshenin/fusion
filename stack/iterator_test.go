@@ -19,8 +19,8 @@ func TestIterator(t *testing.T) {
 	t.Run("Forward", func(t *testing.T) {
 		t.Parallel()
 		var c Stack[int]
-		const max = 100000
-		for n := 0; n < max; n++ {
+		const count = 100000
+		for n := 0; n < count; n++ {
 			c.Push(n)
 		}
 		var i int
@@ -32,11 +32,11 @@ func TestIterator(t *testing.T) {
 	t.Run("Backward", func(t *testing.T) {
 		t.Parallel()
 		var c Stack[int]
-		const max = 100000
-		for n := 0; n < max; n++ {
+		const count = 100000
+		for n := 0; n < count; n++ {
 			c.Push(n)
 		}
-		var i = max
+		var i = count
 		for x := range c.Iterator(context.Background(), true, 16) {
 			i--
 			require.Equal(t, i, *x)
@@ -64,18 +64,18 @@ func BenchmarkIterator(b *testing.B) {
 		n          int
 	}
 	var c Stack[Elem]
-	const max = 1000000
-	for n := 0; n < max; n++ {
+	const count = 1000000
+	for n := 0; n < count; n++ {
 		c.Push(Elem{n: n})
 	}
 	b.Run("Forward", func(b *testing.B) {
 		b.ReportAllocs()
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		count := b.N
+		left := b.N
 		for {
 			for range c.Iterator(ctx, false, 16) {
-				if count--; count < 1 {
+				if left--; left < 1 {
 					return
 				}
 			}
@@ -85,10 +85,10 @@ func BenchmarkIterator(b *testing.B) {
 		b.ReportAllocs()
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		count := b.N
+		left := b.N
 		for {
 			for range c.Iterator(ctx, true, 16) {
-				if count--; count < 1 {
+				if left--; left < 1 {
 					return
 				}
 			}

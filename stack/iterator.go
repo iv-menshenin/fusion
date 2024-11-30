@@ -2,6 +2,9 @@ package stack
 
 import "context"
 
+// Iterator returns a chan-iterator for iterating over all elements without using a callback function.
+// This allows you to iterate through all elements using a standard `for range` loop.
+// If you need to prematurely terminate the iteration, call the cancel function of the context.
 func (c *Stack[T]) Iterator(ctx context.Context, backward bool, buf int) <-chan *T {
 	ch := make(chan *T, buf)
 	if backward {

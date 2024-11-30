@@ -8,6 +8,9 @@ type Key interface {
 	int | int64 | uint64
 }
 
+// SparseSet is designed to save memory and improve performance when dealing with large datasets
+// that are mostly empty. Instead of allocating space for every possible element, it only stores
+// the elements that are present.
 type SparseSet[K Key, T any] struct {
 	sparse []int
 	dense  *collection.Collection[backRef[K, T]]
@@ -36,11 +39,12 @@ func (s *SparseSet[K, T]) Len() int {
 
 const NULL = -1
 
+// Set stores the object under a specific identifier, returning a reference to it.
 func (s *SparseSet[K, T]) Set(key K, val T) (ref *T) {
 	id := int(key)
 	if currSz := len(s.sparse); currSz <= id {
 		newSize := len(s.sparse) * 2
-		if newSize < id {
+		if newSize <= id {
 			newSize = id + 1
 		}
 		old := s.sparse
@@ -64,6 +68,9 @@ func (s *SparseSet[K, T]) Set(key K, val T) (ref *T) {
 	return ref
 }
 
+// Get returns a reference to the object associated with the identifier `key`.
+//
+// The reference data can be modified, but avoid saving the reference, it may become invalid after calling methods that modify it, such as Delete.
 func (s *SparseSet[K, T]) Get(key K) *T {
 	id := int(key)
 	if len(s.sparse) <= id {
@@ -76,23 +83,17 @@ func (s *SparseSet[K, T]) Get(key K) *T {
 	return &br.data
 }
 
-func (s *SparseSet[K, T]) Pop() T {
-	br := s.dense.Pop()
-	s.sparse[int(br.ref)] = NULL
-	s.size--
-	return br.data
-}
-
+// Delete deletes an object by its Key from the SparseSet.
+//
+// Note that to improve performance, there is a side effect: the deleted object is replaced by the last object,
+// not the next in line. This avoids large data movement when deleting values.
+//
+// Please note that after calling this method, the links that were obtained earlier by the Get method may be invalid.
 func (s *SparseSet[K, T]) Delete(key K) {
 	id := int(key)
 	if len(s.sparse) <= id {
 		panic("out of bounds")
 	}
-
-	if id == 750000 {
-		id = 750000
-	}
-
 	s.size--
 	deleted := s.sparse[id]
 	s.sparse[id] = NULL
@@ -111,4 +112,18 @@ func (s *SparseSet[K, T]) Delete(key K) {
 	// place here  -----^        // *dd = ld
 	// swap sparse [1|2|-|4|5|3] // s.sparse[id] = NULL
 	// dense:      [a|b|f|d|e]   // s.sparse[int(ld.ref)] = deleted
+}
+
+// Each iterates through all the elements in the Collection and calls the provided callback function for each of
+// the elements. If the callback function returns false, the iteration will be stopped.
+func (s *SparseSet[K, T]) Each(callback func(key K, val *T) bool) {
+	for k, v := range s.sparse {
+		if v == NULL {
+			continue
+		}
+		gh := callback(K(k), &s.dense.Get(v).data)
+		if !gh {
+			return
+		}
+	}
 }
