@@ -22,7 +22,8 @@ You can think of it like a stack of plates: you add plates to the top and remove
 Key Operations:
 - Push: Add an element to the top of the stack.
 - Pop: Remove the element from the top of the stack.
-- Peek (by index): Retrieve the element at the given position of the stack without removing it. Slow.
+- Peek: Retrieve the element from the top of the stack without removing it.
+- Get: Retrieve the element from the given position of the stack without removing it. Slow
 
 ## Tree (only max heap for now)
 

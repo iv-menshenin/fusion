@@ -28,13 +28,20 @@ func Init[T any](val []T) *Stack[T] {
 	return &s
 }
 
-// Get returns the top element of the stack without removing it. It's copy of Peek method for sorting support.
-func (c *Stack[T]) Get(i int) *T {
-	return c.Peek(i)
+// Peek returns the top element of the stack without removing it.
+func (c *Stack[T]) Peek() *T {
+	if c.count == 0 {
+		panic(ErrOutOfBounds{i: 0, l: c.count})
+	}
+	b := c.last
+	for b.count == 0 {
+		b = b.prev
+	}
+	return &b.cont[b.count-1]
 }
 
-// Peek returns the top element of the stack without removing it.
-func (c *Stack[T]) Peek(i int) *T {
+// Get returns the top element of the stack without removing it. It's copy of Peek method for sorting support.
+func (c *Stack[T]) Get(i int) *T {
 	if i > c.count-1 {
 		panic(ErrOutOfBounds{i: i, l: c.count})
 	}
@@ -63,16 +70,12 @@ func (c *Stack[T]) Pop() T {
 	if c.sccur != nil {
 		c.sccur = nil
 	}
-	l := len(c.last.cont)
-	for l == 0 {
-		c.removeLast()
-		l = len(c.last.cont)
+	if c.last.count == 0 {
+		c.dropLastBucket()
 	}
-	v := c.last.cont[l-1]
-	c.last.cont = c.last.cont[:l-1]
 	c.count--
 	c.last.count--
-	return v
+	return c.last.cont[c.last.count]
 }
 
 // Push adds an element to the top of the stack.
@@ -83,11 +86,10 @@ func (c *Stack[T]) Push(elem T) *T {
 	if c.sccur == c.last {
 		c.sccur = nil
 	}
-	l := len(c.last.cont)
-	c.last.cont = c.last.cont[:l+1]
-	c.last.cont[l] = elem
+	l := c.last.count
 	c.last.count++
 	c.count++
+	c.last.cont[l] = elem
 	return &c.last.cont[l]
 }
 
@@ -99,7 +101,7 @@ func (c *Stack[T]) capable() bool {
 	if c.last == nil {
 		return false
 	}
-	return len(c.last.cont) < cap(c.last.cont)
+	return c.last.count < cap(c.last.cont)
 }
 
 func (c *Stack[T]) extend() {
@@ -127,13 +129,13 @@ func (c *Stack[T]) newBucket() *bucket[T] {
 		b = &c.cache[l]
 	)
 	if cap(b.cont) == 0 {
-		b.cont = make([]T, 0, c.sz())
+		b.cont = make([]T, c.newSZ())
 	}
 	c.cache = c.cache[:l]
 	return b
 }
 
-func (c *Stack[T]) sz() int {
+func (c *Stack[T]) newSZ() int {
 	if c.last == nil {
 		return firstBucketSz
 	}
@@ -144,7 +146,7 @@ func (c *Stack[T]) sz() int {
 	return sz
 }
 
-func (c *Stack[T]) removeLast() {
+func (c *Stack[T]) dropLastBucket() {
 	if c.last == nil {
 		return
 	}

@@ -30,7 +30,7 @@ func TestSortable(t *testing.T) {
 		c.Push(7)
 		sort.Sort(s)
 		for n := 0; n < 10; n++ {
-			require.Equal(t, n, *c.Peek(n))
+			require.Equal(t, n, *c.Get(n))
 		}
 	})
 	t.Run("Sort1Mln", func(t *testing.T) {
@@ -45,7 +45,7 @@ func TestSortable(t *testing.T) {
 		}
 		sort.Sort(s)
 		for n := 0; n < max; n++ {
-			require.Equal(t, n, *c.Peek(n))
+			require.Equal(t, n, *c.Get(n))
 		}
 	})
 }
