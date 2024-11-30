@@ -1,5 +1,7 @@
 package stack
 
+import "github.com/iv-menshenin/fusion/errors"
+
 type (
 	Stack[T any] struct {
 		count int
@@ -31,7 +33,7 @@ func Init[T any](val []T) *Stack[T] {
 // Peek returns the top element of the stack without removing it.
 func (c *Stack[T]) Peek() *T {
 	if c.count == 0 {
-		panic(ErrOutOfBounds{i: 0, l: c.count})
+		panic(errors.OutOfBounds(c.count, 0))
 	}
 	b := c.last
 	for b.count == 0 {
@@ -43,7 +45,7 @@ func (c *Stack[T]) Peek() *T {
 // Get returns the top element of the stack without removing it. It's copy of Peek method for sorting support.
 func (c *Stack[T]) Get(i int) *T {
 	if i > c.count-1 {
-		panic(ErrOutOfBounds{i: i, l: c.count})
+		panic(errors.OutOfBounds(c.count, i))
 	}
 	var (
 		lx  = c.count
@@ -65,7 +67,7 @@ func (c *Stack[T]) Get(i int) *T {
 // Pop removes and returns the top element of the stack.
 func (c *Stack[T]) Pop() T {
 	if c.count == 0 {
-		panic(ErrOutOfBounds{l: c.count})
+		panic(errors.OutOfBounds(c.count, 0))
 	}
 	if c.sccur != nil {
 		c.sccur = nil
