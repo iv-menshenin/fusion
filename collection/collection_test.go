@@ -180,6 +180,32 @@ func TestFusionCollectionInit(t *testing.T) {
 	})
 }
 
+func TestFusionCollectionPrune(t *testing.T) {
+	var c = New[int](10)
+	for n := 0; n < 100; n++ {
+		c.Push(n)
+	}
+	for n := 9; n >= 0; n-- {
+		c.Delete(n)
+	}
+	require.Equal(t, 90, c.Len())
+
+	require.Len(t, c.buckets, 10)
+
+	c.Prune()
+
+	require.Len(t, c.buckets, 9)
+
+	// check values
+	var x [100]bool
+	for n := 0; n < c.Len(); n++ {
+		x[*c.Get(n)] = true
+	}
+	for n := 0; n < len(x); n++ {
+		require.Equal(t, n >= 10, x[n], "bad %d", n)
+	}
+}
+
 func BenchmarkFusionCollectionGet(b *testing.B) {
 	type Elem struct {
 		s          string

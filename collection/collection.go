@@ -3,6 +3,17 @@ package collection
 import "github.com/iv-menshenin/fusion/errors"
 
 type (
+	// Collection is a special data structure designed to avoid excessive memory allocation when adding
+	// a large number of values to a slice in situations where you do not know in advance the amount of data
+	// that needs to be stored.
+	//
+	// The collection guarantees correct sorting as long as you do not remove a value from the middle.
+	// When a value is removed, all subsequent values are not shifted; instead, the current value is replaced
+	// with the last one, and the length is reduced by one.
+	//
+	// The Push and Get methods return a reference to an object that can be modified. Note that the reference
+	// is guaranteed to be valid only until the first call to methods that delete values, such as Delete or even Pop.
+	// Avoid storing the reference for a long time.
 	Collection[T any] struct {
 		len     int
 		bsz     int
@@ -15,6 +26,8 @@ type (
 
 const defaultBucketSz = 1000
 
+// Init allows you to create a Collection with pre-fulfilled data.
+// The slice passed as an argument will be fully reused if its length is divisible by the bucket size.
 func Init[T any](val []T, bucketSz int) *Collection[T] {
 	if bucketSz == 0 {
 		bucketSz = defaultBucketSz
@@ -25,11 +38,14 @@ func Init[T any](val []T, bucketSz int) *Collection[T] {
 	)
 	for len(val) > 0 {
 		if len(val) < bucketSz {
-			buckets = append(buckets, &bucket[T]{data: append(make([]T, 0, bucketSz), val...)})
+			data := make([]T, bucketSz)
+			copy(data[:len(val)], val)
+			buckets = append(buckets, &bucket[T]{data: data})
 			break
 		}
+		// no copy data
 		buckets = append(buckets, &bucket[T]{
-			data: val[:bucketSz], // no copy data
+			data: val[:bucketSz],
 		})
 		val = val[bucketSz:]
 	}
@@ -40,6 +56,7 @@ func Init[T any](val []T, bucketSz int) *Collection[T] {
 	}
 }
 
+// New creates a new Collection with the specified bucket size. If the size is zero, the default value will be used.
 func New[T any](bucketSz int) *Collection[T] {
 	if bucketSz == 0 {
 		bucketSz = defaultBucketSz
@@ -53,71 +70,89 @@ func (c *Collection[T]) Len() int {
 	return c.len
 }
 
+// Push adds a new value to the end of the Collection and returns a reference to it.
 func (c *Collection[T]) Push(val T) *T {
-	if len(c.buckets) == 0 {
-		c.buckets = append(make([]*bucket[T], 0, 1000), c.newBucket())
-	}
-	b := c.buckets[len(c.buckets)-1]
-	l := len(b.data)
-	if l == cap(b.data) {
-		b = c.newBucket()
-		c.buckets = append(c.buckets, b)
-		l = 0
-	}
-	b.data = append(b.data, val)
-	c.len++
-	return &b.data[l]
-}
-
-func (c *Collection[T]) newBucket() *bucket[T] {
 	if c.bsz == 0 {
 		c.bsz = defaultBucketSz
 	}
-	return &bucket[T]{
-		data: make([]T, 0, c.bsz),
+	id := c.len
+	bId := id / c.bsz
+	xId := id % c.bsz
+	c.len++
+	if len(c.buckets) <= bId {
+		c.extendBuckets()
 	}
+	c.buckets[bId].data[xId] = val
+	return &c.buckets[bId].data[xId]
 }
 
-func (c *Collection[T]) Get(i int) *T {
-	if i >= c.len {
+func (c *Collection[T]) extendBuckets() {
+	c.buckets = append(c.buckets, &bucket[T]{
+		data: make([]T, c.bsz),
+	})
+}
+
+// Get allows you to get a reference to an object located in a Collection.
+//
+// Avoid storing the link outside of the Collection for long periods of time.
+func (c *Collection[T]) Get(id int) *T {
+	if id >= c.len {
 		return nil
 	}
-	return &c.buckets[i/c.bsz].data[i%c.bsz]
+	bId := id / c.bsz
+	xId := id % c.bsz
+	return &c.buckets[bId].data[xId]
 }
 
-func (c *Collection[T]) Delete(i int) {
-	if i >= c.len {
-		panic(errors.OutOfBounds(c.len, i))
+// Delete deletes an object by its index from the collection.
+//
+// Note that to improve performance, there is a side effect: the deleted object is replaced by the last object,
+// not the next in line. This avoids large data movement when deleting values from the beginning.
+//
+// So if you need to delete several values from n to m, it is safe to do it only in the index decreasing direction,
+// i.e. from m to n.
+func (c *Collection[T]) Delete(id int) {
+	if id >= c.len {
+		panic(errors.OutOfBounds(c.len, id))
 	}
-	if (c.len - 1) == i {
-		// removed last element
-		c.len--
-		b := c.buckets[len(c.buckets)-1]
-		b.data = b.data[:len(b.data)-1]
-		return
+	lId := c.len - 1
+	xbId := lId / c.bsz
+	xxId := lId % c.bsz
+	bId := id / c.bsz
+	xId := id % c.bsz
+	if bId != xbId || xId != xxId {
+		// swap
+		c.buckets[bId].data[xId] = c.buckets[xbId].data[xxId]
 	}
-	ref := &c.buckets[i/c.bsz].data[i%c.bsz]
-	last := c.Pop()
-	*ref = last
+	c.len--
+
+	// clear cell
+	var empty T
+	c.buckets[xbId].data[xxId] = empty
 }
 
+// Pop selects the last item in the collection and returns a copy of it. The original item is deleted.
 func (c *Collection[T]) Pop() T {
 	if c.len < 1 {
 		panic(errors.OutOfBounds(c.len, 0))
 	}
+	id := c.len - 1
+	bId := id / c.bsz
+	xId := id % c.bsz
 	c.len--
-	b := c.buckets[len(c.buckets)-1]
-	l := len(b.data)
-	val := b.data[l-1]
+	b := c.buckets[bId]
+	val := b.data[xId]
 	// clean cell
 	var empty T
-	b.data[l-1] = empty
-	// reduce
-	if len(b.data) == 1 {
-		c.buckets[len(c.buckets)-1] = nil
-		c.buckets = c.buckets[:len(c.buckets)-1]
-	} else {
-		b.data = b.data[:l-1]
-	}
+	b.data[xId] = empty
 	return val
+}
+
+// Prune clears unoccupied space. It can be used after a large number of calls to Delete or Pop method.
+func (c *Collection[T]) Prune() {
+	bId := c.len / c.bsz
+	for n := bId + 1; n < len(c.buckets); n++ {
+		c.buckets[n] = nil
+	}
+	c.buckets = c.buckets[:bId]
 }
