@@ -156,3 +156,21 @@ func (c *Collection[T]) Prune() {
 	}
 	c.buckets = c.buckets[:bId]
 }
+
+// Each iterates through all the elements in the Collection and calls the provided callback function for each of
+// the elements. If the callback function returns false, the iteration will be stopped.
+func (c *Collection[T]) Each(callback func(*T) bool) {
+	bId := c.len / c.bsz
+	xId := c.len % c.bsz
+	for cbId := range c.buckets {
+		for cxId := range c.buckets[cbId].data {
+			if cbId == bId && xId <= cxId {
+				return
+			}
+			if callback(&c.buckets[cbId].data[cxId]) {
+				continue
+			}
+			return
+		}
+	}
+}

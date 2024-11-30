@@ -206,6 +206,33 @@ func TestFusionCollectionPrune(t *testing.T) {
 	}
 }
 
+func TestFusionCollectionEach(t *testing.T) {
+	var c = New[int](33)
+	for n := 0; n < 100; n++ {
+		c.Push(n)
+	}
+
+	t.Run("each_value", func(t *testing.T) {
+		var x [100]bool
+		c.Each(func(i *int) bool {
+			x[*i] = true
+			return true
+		})
+		// check values
+		for n := 0; n < len(x); n++ {
+			require.True(t, x[n], "bad %d", n)
+		}
+	})
+	t.Run("iter_cancellation", func(t *testing.T) {
+		var cc = make(map[int]struct{})
+		c.Each(func(i *int) bool {
+			cc[*i] = struct{}{}
+			return len(cc) < 3
+		})
+		require.Len(t, cc, 3)
+	})
+}
+
 func BenchmarkFusionCollectionGet(b *testing.B) {
 	type Elem struct {
 		s          string
