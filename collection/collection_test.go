@@ -187,14 +187,14 @@ func BenchmarkFusionCollectionGet(b *testing.B) {
 		n          int
 	}
 	var c Collection[Elem]
-	const max = 1000000
-	for n := 0; n < max; n++ {
+	const count = 1000000
+	for n := 0; n < count; n++ {
 		c.Push(Elem{n: n})
 	}
 	b.Run("Last", func(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
-			_ = c.Get(max - 1)
+			_ = c.Get(count - 1)
 		}
 	})
 	b.Run("First", func(b *testing.B) {
@@ -206,19 +206,19 @@ func BenchmarkFusionCollectionGet(b *testing.B) {
 	b.Run("Mid", func(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
-			_ = c.Get(max / 2)
+			_ = c.Get(count / 2)
 		}
 	})
 	b.Run("Forward", func(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
-			_ = c.Get(n % max)
+			_ = c.Get(n % count)
 		}
 	})
 	b.Run("Backward", func(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
-			_ = c.Get(max - (n % max) - 1)
+			_ = c.Get(count - (n % count) - 1)
 		}
 	})
 	b.Run("Random", func(b *testing.B) {
@@ -226,15 +226,15 @@ func BenchmarkFusionCollectionGet(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			switch n % 5 {
 			case 0:
-				_ = c.Get(max / 2)
+				_ = c.Get(count / 2)
 			case 1:
-				_ = c.Get(n % max)
+				_ = c.Get(n % count)
 			case 2:
-				_ = c.Get(max - (max / 4))
+				_ = c.Get(count - (count / 4))
 			case 3:
-				_ = c.Get(max - (n % max) - 1)
+				_ = c.Get(count - (n % count) - 1)
 			case 4:
-				_ = c.Get(max / 4)
+				_ = c.Get(count / 4)
 			}
 		}
 	})
