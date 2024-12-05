@@ -14,9 +14,14 @@ type (
 	// The Push and Get methods return a reference to an object that can be modified. Note that the reference
 	// is guaranteed to be valid only until the first call to methods that delete values, such as Delete or even Pop.
 	// Avoid storing the reference for a long time.
+	//
+	// If you use a power of two as the bucket size, lightweight bit-shifting and bit-masking operations will be applied
+	// for calculating read/write addresses, significantly improving performance
 	Collection[T any] struct {
 		len     int
 		bsz     int
+		bShift  int
+		xMask   int
 		buckets []*bucket[T]
 	}
 	bucket[T any] struct {
@@ -28,42 +33,63 @@ const defaultBucketSz = 1024
 
 // Init allows you to create a Collection with pre-fulfilled data.
 // The slice passed as an argument will be fully reused if its length is divisible by the bucket size.
+//
+// If you use a power of two as the bucket size, lightweight bit-shifting and bit-masking operations will be applied
+// for calculating read/write addresses, significantly improving performance
 func Init[T any](val []T, bucketSz int) *Collection[T] {
-	if bucketSz == 0 {
-		bucketSz = defaultBucketSz
-	}
-	var (
-		l       = len(val)
-		buckets = make([]*bucket[T], 0, 1+(l/bucketSz))
-	)
+	var c Collection[T]
+	c.initBucketSize(bucketSz)
+
+	c.len = len(val)
+	c.buckets = make([]*bucket[T], 0, 1+(c.len/c.bsz))
+
 	for len(val) > 0 {
-		if len(val) < bucketSz {
-			data := make([]T, bucketSz)
+		if len(val) < c.bsz {
+			data := make([]T, c.bsz)
 			copy(data[:len(val)], val)
-			buckets = append(buckets, &bucket[T]{data: data})
+			c.buckets = append(c.buckets, &bucket[T]{data: data})
 			break
 		}
 		// no copy data
-		buckets = append(buckets, &bucket[T]{
-			data: val[:bucketSz],
+		c.buckets = append(c.buckets, &bucket[T]{
+			data: val[:c.bsz],
 		})
-		val = val[bucketSz:]
+		val = val[c.bsz:]
 	}
-	return &Collection[T]{
-		len:     l,
-		bsz:     bucketSz,
-		buckets: buckets,
-	}
+	return &c
 }
 
 // New creates a new Collection with the specified bucket size. If the size is zero, the default value will be used.
+//
+// If you use a power of two as the bucket size, lightweight bit-shifting and bit-masking operations will be applied
+// for calculating read/write addresses, significantly improving performance
 func New[T any](bucketSz int) *Collection[T] {
-	if bucketSz == 0 {
-		bucketSz = defaultBucketSz
+	var c Collection[T]
+	c.initBucketSize(bucketSz)
+	return &c
+}
+
+func (c *Collection[T]) initBucketSize(bsz int) {
+	if bsz == 0 {
+		bsz = defaultBucketSz
 	}
-	return &Collection[T]{
-		bsz: bucketSz,
+	c.bsz = bsz
+	// we can make all faster if bsz is power of two
+	var bits, mask int
+	for bsz > 0 {
+		if bsz == 1 {
+			break
+		}
+		if bsz%2 > 0 {
+			// wasted
+			return
+		}
+		bsz = bsz / 2
+		bits += 1
+		mask = (mask << 1) + 1
 	}
+	c.bShift = bits
+	c.xMask = mask
 }
 
 func (c *Collection[T]) Len() int {
@@ -73,11 +99,17 @@ func (c *Collection[T]) Len() int {
 // Push adds a new value to the end of the Collection and returns a reference to it.
 func (c *Collection[T]) Push(val T) *T {
 	if c.bsz == 0 {
-		c.bsz = defaultBucketSz
+		c.initBucketSize(defaultBucketSz)
 	}
 	id := c.len
-	bId := id / c.bsz
-	xId := id % c.bsz
+	var xId, bId int
+	if c.xMask > 0 {
+		bId = id >> c.bShift
+		xId = id & c.xMask
+	} else {
+		xId = id % c.bsz
+		bId = id / c.bsz
+	}
 	c.len++
 	if len(c.buckets) <= bId {
 		c.extendBuckets()
@@ -94,13 +126,19 @@ func (c *Collection[T]) extendBuckets() {
 
 // Get allows you to get a reference to an object located in a Collection.
 //
-// Avoid storing the link outside of the Collection for long periods of time.
+// Avoid storing the link outside the Collection for long periods of time.
 func (c *Collection[T]) Get(id int) *T {
 	if id >= c.len {
 		return nil
 	}
-	bId := id / c.bsz
-	xId := id % c.bsz
+	var xId, bId int
+	if c.xMask > 0 {
+		bId = id >> c.bShift
+		xId = id & c.xMask
+	} else {
+		xId = id % c.bsz
+		bId = id / c.bsz
+	}
 	return &c.buckets[bId].data[xId]
 }
 
@@ -115,11 +153,23 @@ func (c *Collection[T]) Delete(id int) {
 	if id >= c.len {
 		panic(errors.OutOfBounds(c.len, id))
 	}
+	var xId, bId int
+	if c.xMask > 0 {
+		bId = id >> c.bShift
+		xId = id & c.xMask
+	} else {
+		xId = id % c.bsz
+		bId = id / c.bsz
+	}
 	lId := c.len - 1
-	xbId := lId / c.bsz
-	xxId := lId % c.bsz
-	bId := id / c.bsz
-	xId := id % c.bsz
+	var xxId, xbId int
+	if c.xMask > 0 {
+		xbId = lId >> c.bShift
+		xxId = lId & c.xMask
+	} else {
+		xxId = lId % c.bsz
+		xbId = lId / c.bsz
+	}
 	if bId != xbId || xId != xxId {
 		// swap
 		c.buckets[bId].data[xId] = c.buckets[xbId].data[xxId]
@@ -137,8 +187,14 @@ func (c *Collection[T]) Pop() T {
 		panic(errors.OutOfBounds(c.len, 0))
 	}
 	id := c.len - 1
-	bId := id / c.bsz
-	xId := id % c.bsz
+	var xId, bId int
+	if c.xMask > 0 {
+		bId = id >> c.bShift
+		xId = id & c.xMask
+	} else {
+		xId = id % c.bsz
+		bId = id / c.bsz
+	}
 	c.len--
 	b := c.buckets[bId]
 	val := b.data[xId]
@@ -150,6 +206,9 @@ func (c *Collection[T]) Pop() T {
 
 // Prune clears unoccupied space. It can be used after a large number of calls to Delete or Pop method.
 func (c *Collection[T]) Prune() {
+	if c.bsz == 0 {
+		c.initBucketSize(defaultBucketSz)
+	}
 	bId := c.len / c.bsz
 	for n := bId + 1; n < len(c.buckets); n++ {
 		c.buckets[n] = nil
@@ -160,6 +219,9 @@ func (c *Collection[T]) Prune() {
 // Each iterates through all the elements in the Collection and calls the provided callback function for each of
 // the elements. If the callback function returns false, the iteration will be stopped.
 func (c *Collection[T]) Each(callback func(*T) bool) {
+	if c.bsz == 0 {
+		c.initBucketSize(defaultBucketSz)
+	}
 	bId := c.len / c.bsz
 	xId := c.len % c.bsz
 	for cbId := range c.buckets {

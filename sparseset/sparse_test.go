@@ -49,7 +49,7 @@ func TestSparseSet(t *testing.T) {
 }
 
 func TestSparseSetMass(t *testing.T) {
-	sp := New[int64, string](1000, 1000)
+	sp := New[int64, string](1000, 0)
 
 	const count = 1000000
 	for n := 0; n < count; n += 2 {
@@ -136,6 +136,34 @@ func TestSparseSetEach(t *testing.T) {
 			require.Equal(t, -i, v.Z)
 		}
 	})
+	t.Run("1_000_000/131_072", func(t *testing.T) {
+		type some struct {
+			X, Y, Z int
+		}
+		sp := New[int, some](1000000, 131_072)
+		for i := 0; i < 1_000_000; i++ {
+			sp.Set(i, some{})
+		}
+
+		started := time.Now()
+		var y int
+		sp.Each(func(_ int, val *some) bool {
+			val.X = 1
+			val.Y = y
+			val.Z = -y
+			y++
+			return true
+		})
+		t.Logf("done 1m with %v", time.Since(started))
+
+		// check
+		for i := 0; i < 1_000_000; i++ {
+			v := sp.Get(i)
+			require.Equal(t, 1, v.X)
+			require.Equal(t, i, v.Y)
+			require.Equal(t, -i, v.Z)
+		}
+	})
 	t.Run("16_000_000/1_000_000", func(t *testing.T) {
 		type some struct {
 			X, Y, Z int
@@ -156,11 +184,31 @@ func TestSparseSetEach(t *testing.T) {
 		})
 		t.Logf("done 16m with %v", time.Since(started))
 	})
+	t.Run("16_000_000/524_288", func(t *testing.T) {
+		type some struct {
+			X, Y, Z int
+		}
+		sp := New[int, some](16000000, 524_288)
+		for i := 0; i < 16_000_000; i++ {
+			sp.Set(i, some{})
+		}
+
+		started := time.Now()
+		var y int
+		sp.Each(func(_ int, val *some) bool {
+			val.X = 1
+			val.Y = y
+			val.Z = -y
+			y++
+			return true
+		})
+		t.Logf("done 16m with %v", time.Since(started))
+	})
 }
 
 func BenchmarkSparseSet(b *testing.B) {
 	b.Run("insert", func(b *testing.B) {
-		sp := New[int, string](1000, 1000)
+		sp := New[int, string](1000, 0)
 		for i := 0; i < 1000000; i++ {
 			sp.Set(i, fmt.Sprintf("inited-%d", i))
 		}
@@ -173,7 +221,7 @@ func BenchmarkSparseSet(b *testing.B) {
 	})
 
 	b.Run("delete", func(b *testing.B) {
-		sp := New[int, string](1000, 1000)
+		sp := New[int, string](1000, 0)
 		for i := 0; i < b.N; i++ {
 			sp.Set(i, strconv.Itoa(i))
 		}
@@ -187,7 +235,7 @@ func BenchmarkSparseSet(b *testing.B) {
 }
 
 func BenchmarkSparseSetDelete(b *testing.B) {
-	sp := New[int, string](b.N, 1000)
+	sp := New[int, string](b.N, 0)
 	for i := 0; i < b.N; i++ {
 		sp.Set(i, fmt.Sprintf("inited-%d", i))
 	}
@@ -200,7 +248,7 @@ func BenchmarkSparseSetDelete(b *testing.B) {
 
 func BenchmarkSparseSetEach(b *testing.B) {
 	b.Run("by_count", func(b *testing.B) {
-		sp := New[int, uint64](b.N, 1000)
+		sp := New[int, uint64](b.N, 0)
 		for i := 0; i < b.N; i++ {
 			sp.Set(i, uint64(i))
 		}
@@ -212,7 +260,7 @@ func BenchmarkSparseSetEach(b *testing.B) {
 		})
 	})
 	b.Run("static_size", func(b *testing.B) {
-		sp := New[int, uint64](b.N, 1000)
+		sp := New[int, uint64](b.N, 0)
 		for i := 0; i < 1_000_000; i++ {
 			sp.Set(i, uint64(i))
 		}
@@ -230,7 +278,7 @@ func BenchmarkSparseSetEach(b *testing.B) {
 }
 
 func BenchmarkSparseSetEach18m(b *testing.B) {
-	sp := New[int, uint64](b.N, 1000000)
+	sp := New[int, uint64](b.N, 0)
 	for i := 0; i < 18_000_000; i++ {
 		sp.Set(i, uint64(i))
 	}
@@ -249,7 +297,7 @@ func BenchmarkSparseSetEach18m(b *testing.B) {
 }
 
 func BenchmarkSparseSetIter18m(b *testing.B) {
-	sp := New[int, uint64](b.N, 1000000)
+	sp := New[int, uint64](b.N, 0)
 	for i := 0; i < 18_000_000; i++ {
 		sp.Set(i, uint64(i))
 	}
