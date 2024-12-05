@@ -24,7 +24,7 @@ type (
 	}
 )
 
-const defaultBucketSz = 1000
+const defaultBucketSz = 1024
 
 // Init allows you to create a Collection with pre-fulfilled data.
 // The slice passed as an argument will be fully reused if its length is divisible by the bucket size.

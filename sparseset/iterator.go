@@ -31,3 +31,48 @@ func (s *SparseSet[K, T]) sendElements(ctx context.Context, ch chan<- Pair[K, T]
 		}
 	}
 }
+
+// Fetcher allows for a sequential traversal of all elements in the SparseSet.
+//
+// Call the Next method to move the cursor and access the data. The returned value serves as an indicator that the value exists and can be accessed.
+//
+// The basic usage is as follows:
+//
+//	f := s.Fetcher()
+//	for f.Next() {
+//	  _ = f.Fetch()
+//	}
+func (s *SparseSet[K, T]) Fetcher() *Fetcher[K, T] {
+	return &Fetcher[K, T]{s: s}
+}
+
+// Fetcher allows for a sequential traversal of all elements in the SparseSet.
+type Fetcher[K Key, T any] struct {
+	s *SparseSet[K, T]
+	i int
+	x int
+}
+
+// Next advances the cursor forward, returning true if the end has not yet been reached; otherwise, it returns false.
+func (f *Fetcher[K, T]) Next() bool {
+	for {
+		f.i++
+		if f.s.Len() < f.i {
+			return false
+		}
+		idx := f.s.sparse[f.i-1]
+		if idx != NULL {
+			f.x = idx
+			return true
+		}
+	}
+}
+
+// Fetch allows access to the current element and it's key of the SparseSet.
+//
+// Be careful, this function should not be called before the Next function has been called for the first time;
+// otherwise, you will attempt to fetch an element at position -1, which will result in an error.
+func (f *Fetcher[K, T]) Fetch() (K, *T) {
+	el := f.s.dense.Get(f.x)
+	return el.ref, &el.data
+}
