@@ -80,11 +80,11 @@ func (c *Collection[T]) initBucketSize(bsz int) {
 		if bsz == 1 {
 			break
 		}
-		if bsz%2 > 0 {
+		if bsz&1 > 0 {
 			// wasted
 			return
 		}
-		bsz = bsz / 2
+		bsz >>= 1
 		bits += 1
 		mask = (mask << 1) + 1
 	}
